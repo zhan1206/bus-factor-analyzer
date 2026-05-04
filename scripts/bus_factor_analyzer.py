@@ -11,13 +11,29 @@ import re
 import json
 import argparse
 import subprocess
+import shutil
 from collections import Counter
 from pathlib import Path
 
 
+def find_git():
+    """自动查找 git 可执行文件路径"""
+    git_exe = shutil.which('git')
+    if git_exe:
+        return git_exe
+    # Windows fallback
+    fallback = r"C:\Program Files\Git\cmd\git.exe"
+    if os.path.exists(fallback):
+        return fallback
+    fallback2 = r"C:\Program Files (x86)\Git\cmd\git.exe"
+    if os.path.exists(fallback2):
+        return fallback2
+    return 'git'
+
+
 def run_git_command(cmd, cwd):
     """运行 git 命令并返回输出"""
-    git_exe = r"C:\Users\朱子瞻\AppData\Local\Git\cmd\git.exe"
+    git_exe = find_git()
     try:
         result = subprocess.run(
             [git_exe] + cmd,
@@ -35,7 +51,7 @@ def run_git_command(cmd, cwd):
 
 def get_git_authors(project_path):
     """获取 git 仓库的所有作者"""
-    output, ok = run_git_command(['log', '--format=%ae', '--follow'], project_path)
+    output, ok = run_git_command(['log', '--format=%ae'], project_path)
     if not ok:
         return []
     authors = [line.strip() for line in output.splitlines() if line.strip()]
@@ -43,10 +59,10 @@ def get_git_authors(project_path):
 
 
 def get_git_commits_by_author(project_path):
-    """获取每个作者的提交次数"""
+    """获取每个作者的提交次数和代码行数"""
     output, ok = run_git_command(['log', '--format=%ae', '--numstat'], project_path)
     if not ok:
-        return {}
+        return Counter(), Counter()
 
     author_commits = Counter()
     author_lines = Counter()
@@ -173,7 +189,7 @@ def analyze_bus_factor(project_path):
     # Gini 系数（贡献均匀度）
     n = len(author_stats)
     if n > 1 and total_lines > 0:
-        sorted_lines = sorted(stat['lines'] for stat in author_stats)
+        sorted_lines = sorted([stat['lines'] for stat in author_stats])
         cumsum = 0
         for i, l in enumerate(sorted_lines):
             cumsum += (2 * (i + 1) - n - 1) * l
